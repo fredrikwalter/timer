@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Timer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        /* Custom styles for smooth background transition and font */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s ease-in-out;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Ensure full viewport height */
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        .timer-display {
+            font-variant-numeric: tabular-nums; /* Ensures fixed width for digits */
+        }
+        /* Style for icons to ensure consistent sizing */
+        .lucide {
+            width: 1.5em; /* Adjust icon size as needed */
+            height: 1.5em;
+            stroke-width: 2; /* Adjust stroke thickness */
+        }
+
+        /* Custom slider styles for better appearance */
+        input[type="range"] {
+            -webkit-appearance: none; /* Hides the default slider */
+            width: 100%; /* Full-width slider */
+            height: 8px; /* Slider track height */
+            background: #cbd5e1; /* Tailwind gray-300 */
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px; /* Slider thumb width */
+            height: 24px; /* Slider thumb height */
+            background: #3b82f6; /* Tailwind blue-500 */
+            border-radius: 50%; /* Make it circular */
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: background .2s, transform .2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:active {
+            cursor: grabbing;
+            transform: scale(1.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: background .2s, transform .2s;
+        }
+
+        input[type="range"]::-moz-range-thumb:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="bg-green-500">
+    <div class="flex flex-col items-center justify-center p-4 w-full max-w-md mx-auto">
+        <!-- Timer Display -->
+        <div id="timer" class="text-white text-8xl font-bold timer-display mb-8 md:text-9xl lg:text-10xl">
+            20:00
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex space-x-4 mb-6">
+            <button id="startButton" class="bg-white text-green-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-green-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
+                <i data-lucide="play" class="lucide"></i>
+            </button>
+            <button id="pauseButton" class="bg-white text-yellow-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-yellow-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
+                <i data-lucide="pause" class="lucide"></i>
+            </button>
+            <button id="resetButton" class="bg-white text-red-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
+                <i data-lucide="rotate-ccw" class="lucide"></i>
+            </button>
+            <button id="muteButton" class="bg-white text-gray-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
+                <i data-lucide="volume-x" class="lucide"></i>
+            </button>
+        </div>
+
+        <!-- Timer Length Slider -->
+        <div class="w-full max-w-xs flex flex-col items-center mt-4">
+            <label for="timerLengthSlider" class="text-white text-lg font-semibold mb-2">Set Focus Time:</label>
+            <input type="range" id="timerLengthSlider" min="5" max="60" step="5" value="20">
+            <span id="sliderValueDisplay" class="text-white text-xl font-bold mt-2">20 min</span>
+        </div>
+    </div>
+
+    <!-- Audio element for background music -->
+    <!-- The 'src' will be set dynamically by JavaScript -->
+    <audio id="backgroundMusic" preload="auto"></audio>
+    <!-- Audio element for alarm sound -->
+    <audio id="alarmMusic" preload="auto"></audio>
+
+    <script>
+        // Get DOM elements
+        const timerDisplay = document.getElementById('timer');
+        const startButton = document.getElementById('startButton');
+        const pauseButton = document.getElementById('pauseButton');
+        const resetButton = document.getElementById('resetButton');
+        const muteButton = document.getElementById('muteButton');
+        const body = document.body;
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        const alarmMusic = document.getElementById('alarmMusic');
+        const timerLengthSlider = document.getElementById('timerLengthSlider'); // Get the new slider
+        const sliderValueDisplay = document.getElementById('sliderValueDisplay'); // Get the slider value display
+
+        // Store the original document title
+        const originalDocumentTitle = document.title;
+
+        // Define your playlist of songs
+        const playlist = [
+            'songs/1.mp3',
+            'songs/2.mp3',
+            'songs/3.mp3'
+            // Add more songs here as needed
+        ];
+
+        // Define the path for the alarm sound
+        const alarmPath = 'alarm/alarm1.mp3';
+
+        let currentSongIndex = 0;
+        let initialTime = 20 * 60; // Default initial time (20 minutes)
+        let timeLeft = initialTime;
+        let timerInterval;
+        let isRunning = false;
+        let isMuted = false; // This flag now ONLY controls background music mute
+        let alarmTriggered = false;
+        let fadeInterval = null;
+
+        /**
+         * Loads and plays the song at the currentSongIndex.
+         */
+        function playCurrentSong() {
+            if (playlist.length === 0) {
+                console.warn("Playlist is empty. No music to play.");
+                return;
+            }
+
+            backgroundMusic.src = playlist[currentSongIndex];
+            backgroundMusic.load();
+
+            // Only play background music if it's not globally muted
+            if (!isMuted) {
+                backgroundMusic.play().catch(error => {
+                    console.log("Background audio playback prevented:", error);
+                });
+            }
+        }
+
+        /**
+         * Advances to the next song in the playlist, or loops back to the beginning.
+         */
+        function playNextSong() {
+            currentSongIndex++;
+            if (currentSongIndex >= playlist.length) {
+                currentSongIndex = 0;
+            }
+            playCurrentSong();
+        }
+
+        /**
+         * Formats the time in seconds into MM:SS format.
+         * @param {number} seconds - The time in seconds.
+         * @returns {string} Formatted time string.
+         */
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+        }
+
+        /**
+         * Fades out the background music and starts the alarm.
+         */
+        function startAlarmSequence() {
+            if (alarmTriggered) return;
+            alarmTriggered = true;
+
+            // Stop any ongoing fade
+            if (fadeInterval) {
+                clearInterval(fadeInterval);
+            }
+
+            // Fade out background music
+            const fadeDuration = 4000; // 4 seconds
+            const fadeSteps = 40; // Number of steps for fading
+            const fadeStepVolume = backgroundMusic.volume / fadeSteps;
+
+            fadeInterval = setInterval(() => {
+                if (backgroundMusic.volume > fadeStepVolume) {
+                    backgroundMusic.volume -= fadeStepVolume;
+                } else {
+                    backgroundMusic.volume = 0;
+                    backgroundMusic.pause();
+                    backgroundMusic.currentTime = 0;
+                    clearInterval(fadeInterval);
+                    fadeInterval = null;
+
+                    // Start alarm music after background music has faded
+                    alarmMusic.src = alarmPath;
+                    alarmMusic.load();
+                    alarmMusic.loop = true; // Ensure alarm loops until user interaction
+
+                    // The alarm should play regardless of the 'isMuted' state of background music
+                    alarmMusic.play().catch(error => {
+                        console.log("Alarm audio playback prevented:", error);
+                    });
+                }
+            }, fadeDuration / fadeSteps);
+        }
+
+        /**
+         * Updates the timer display and changes background color based on time left.
+         * Also updates the document title with the current time.
+         */
+        function updateTimer() {
+            const formattedTime = formatTime(timeLeft);
+            timerDisplay.textContent = formattedTime;
+            document.title = `${formattedTime} - Focus Timer`; // Update document title
+
+            if (timeLeft > 10 * 60) {
+                body.className = 'bg-green-500';
+            } else if (timeLeft > 5 * 60) {
+                body.className = 'bg-yellow-500';
+            } else {
+                body.className = 'bg-red-500';
+            }
+
+            if (timeLeft <= 5 && timeLeft > 0 && !alarmTriggered) {
+                startAlarmSequence();
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                timerDisplay.textContent = "00:00";
+                document.title = "Time's Up! -  Focus Timer"; // Update title when timer ends
+                backgroundMusic.pause();
+                backgroundMusic.currentTime = 0;
+                // Alarm continues to play until user interaction
+                if (fadeInterval) {
+                    clearInterval(fadeInterval);
+                    fadeInterval = null;
+                }
+            } else {
+                timeLeft--;
+            }
+        }
+
+        /**
+         * Starts the timer countdown and plays the background music.
+         */
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                timerInterval = setInterval(updateTimer, 1000);
+                // Only play background music if not muted
+                if (!isMuted) {
+                    backgroundMusic.play().catch(error => {
+                        console.log("Background audio playback prevented:", error);
+                    });
+                }
+            }
+        }
+
+        /**
+         * Pauses the timer countdown and the background music/alarm.
+         */
+        function pauseTimer() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            backgroundMusic.pause();
+            alarmMusic.pause(); // Always pause alarm when main pause is hit
+            if (fadeInterval) {
+                clearInterval(fadeInterval);
+                fadeInterval = null;
+                backgroundMusic.volume = 1;
+            }
+            document.title = `Paused - ${formatTime(timeLeft)} -  Focus Timer`; // Update title on pause
+        }
+
+        /**
+         * Resets the timer to its initial state (20 minutes) and stops all music.
+         */
+        function resetTimer() {
+            pauseTimer(); // This will pause both background and alarm music and update title
+            initialTime = 20 * 60; // Reset to default 20 minutes
+            timeLeft = initialTime;
+            updateTimer(); // This will update the display and title
+            body.className = 'bg-green-500';
+            
+            // Pick a new random song on reset
+            if (playlist.length > 0) {
+                currentSongIndex = Math.floor(Math.random() * playlist.length);
+                backgroundMusic.src = playlist[currentSongIndex];
+                backgroundMusic.load();
+            }
+
+            backgroundMusic.currentTime = 0;
+            backgroundMusic.volume = 1;
+            alarmMusic.currentTime = 0;
+            alarmMusic.pause();
+            alarmTriggered = false;
+
+            // Reset slider to 20 minutes and update its display
+            timerLengthSlider.value = 20;
+            sliderValueDisplay.textContent = '20 min';
+            document.title = originalDocumentTitle; // Reset title to original on full reset
+        }
+
+        /**
+         * Sets the timer to a new duration and prepares for a new countdown.
+         * @param {number} minutes - The new duration in minutes.
+         * @param {boolean} updateSlider - Optional: if true, updates the slider's value and display.
+         */
+        function setTimer(minutes, updateSlider = false) {
+            pauseTimer(); // Stop current timer and music, updates title
+            initialTime = minutes * 60; // Set new initial time
+            timeLeft = initialTime;
+            updateTimer(); // Update display and title
+            body.className = 'bg-green-500'; // Reset background color
+
+            // Pick a new random song when setting a new timer length
+            if (playlist.length > 0) {
+                currentSongIndex = Math.floor(Math.random() * playlist.length);
+                backgroundMusic.src = playlist[currentSongIndex];
+                backgroundMusic.load();
+            }
+
+            backgroundMusic.currentTime = 0;
+            backgroundMusic.volume = 1;
+            alarmMusic.currentTime = 0;
+            alarmMusic.pause();
+            alarmTriggered = false;
+            isRunning = false; // Ensure timer is not running after setting new time
+
+            if (updateSlider) {
+                timerLengthSlider.value = minutes;
+                sliderValueDisplay.textContent = `${minutes} min`;
+            }
+        }
+
+        /**
+         * Toggles the mute state of the background music ONLY.
+         */
+        function toggleMute() {
+            isMuted = !isMuted;
+            backgroundMusic.muted = isMuted; // Only affects background music
+
+            const muteIcon = muteButton.querySelector('.lucide');
+            if (isMuted) {
+                muteIcon.setAttribute('data-lucide', 'volume-x');
+                backgroundMusic.pause(); // Pause background music
+            } else {
+                muteIcon.setAttribute('data-lucide', 'volume-2');
+                if (isRunning && timeLeft > 5) { // Only play background music if timer is running and not in alarm phase
+                    backgroundMusic.play().catch(error => {
+                        console.log("Background audio playback prevented after unmute:", error);
+                    });
+                }
+            }
+            lucide.createIcons();
+        }
+
+        // Event listener for when a background song ends
+        backgroundMusic.addEventListener('ended', playNextSong);
+
+        // Event Listeners for main control buttons
+        startButton.addEventListener('click', startTimer);
+        pauseButton.addEventListener('click', pauseTimer);
+        resetButton.addEventListener('click', resetTimer);
+        muteButton.addEventListener('click', toggleMute);
+
+        // Event Listener for the timer length slider
+        timerLengthSlider.addEventListener('input', (event) => {
+            const minutes = parseInt(event.target.value);
+            setTimer(minutes, true); // Pass true to update the slider display
+        });
+
+
+        // Initialize the timer display and load initial song on page load
+        window.onload = function() {
+            // Set initial time to 20 minutes (default) and update slider display
+            setTimer(20, true); // Call setTimer with default 20 minutes and update slider
+
+            // Load alarm sound once to prepare
+            alarmMusic.src = alarmPath;
+            alarmMusic.load();
+
+            // Randomly select the first song to be ready for playback on initial load
+            if (playlist.length > 0) {
+                currentSongIndex = Math.floor(Math.random() * playlist.length);
+                backgroundMusic.src = playlist[currentSongIndex];
+                backgroundMusic.load();
+            }
+
+            lucide.createIcons();
+            // Initial update of the title to show the default time
+            document.title = `${formatTime(timeLeft)} -  Focus Timer`;
+        };
+    </script>
+</body>
+</html>
