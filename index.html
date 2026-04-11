@@ -133,17 +133,27 @@
         // Store the original document title
         const originalDocumentTitle = document.title;
 
-        // Define your playlist of songs
-        const playlist = [
+        // --- Music API Configuration ---
+        // Provider: 'local' uses files in songs/, 'jamendo' fetches from Jamendo API.
+        // Get a free Jamendo client ID at: https://devportal.jamendo.com/
+        const MUSIC_API = {
+            provider: 'local',            // 'local' | 'jamendo'
+            jamendoClientId: 'YOUR_CLIENT_ID_HERE',
+            tags: 'lofi+study',           // Music genre/mood tags to query
+            tracksToFetch: 10,            // Number of tracks to prefetch per session
+        };
+
+        // Fallback local playlist used when provider is 'local' or API fetch fails
+        const localPlaylist = [
             'songs/1.mp3',
             'songs/2.mp3',
-            'songs/3.mp3'
-            // Add more songs here as needed
+            'songs/3.mp3',
         ];
 
         // Define the path for the alarm sound
         const alarmPath = 'alarm/alarm1.mp3';
 
+        let playlist = [...localPlaylist]; // Active playlist, populated by fetchPlaylistFromAPI()
         let currentSongIndex = 0;
         let initialTime = 20 * 60; // Default initial time (20 minutes)
         let timeLeft = initialTime;
@@ -152,6 +162,46 @@
         let isMuted = false; // This flag now ONLY controls background music mute
         let alarmTriggered = false;
         let fadeInterval = null;
+
+        /**
+         * Fetches a random playlist from the configured music API.
+         * Falls back to localPlaylist on any error.
+         */
+        async function fetchPlaylistFromAPI() {
+            if (MUSIC_API.provider === 'local') {
+                playlist = [...localPlaylist];
+                return;
+            }
+
+            try {
+                const url = `https://api.jamendo.com/v3.0/tracks/`
+                    + `?client_id=${encodeURIComponent(MUSIC_API.jamendoClientId)}`
+                    + `&format=json`
+                    + `&limit=${MUSIC_API.tracksToFetch}`
+                    + `&order=random`
+                    + `&tags=${encodeURIComponent(MUSIC_API.tags)}`
+                    + `&audioformat=mp32`;
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    playlist = data.results.map(track => track.audio);
+                    currentSongIndex = 0;
+                    // Pre-load the first track into the audio element
+                    backgroundMusic.src = playlist[0];
+                    backgroundMusic.load();
+                    console.log(`Loaded ${playlist.length} tracks from Jamendo.`);
+                } else {
+                    throw new Error('No tracks returned from API');
+                }
+            } catch (error) {
+                console.warn('Music API fetch failed, falling back to local files:', error);
+                playlist = [...localPlaylist];
+            }
+        }
 
         /**
          * Loads and plays the song at the currentSongIndex.
@@ -275,16 +325,21 @@
 
         /**
          * Starts the timer countdown and plays the background music.
+         * Fetches the playlist from the API on the first start if not yet loaded.
          */
-        function startTimer() {
+        async function startTimer() {
             if (!isRunning) {
                 isRunning = true;
+
+                // Fetch playlist from API on first start (playlist is empty after a reset)
+                if (playlist.length === 0) {
+                    await fetchPlaylistFromAPI();
+                }
+
                 timerInterval = setInterval(updateTimer, 1000);
                 // Only play background music if not muted
                 if (!isMuted) {
-                    backgroundMusic.play().catch(error => {
-                        console.log("Background audio playback prevented:", error);
-                    });
+                    playCurrentSong();
                 }
             }
         }
@@ -315,12 +370,10 @@
             updateTimer(); // This will update the display and title
             body.className = 'bg-green-500';
             
-            // Pick a new random song on reset
-            if (playlist.length > 0) {
-                currentSongIndex = Math.floor(Math.random() * playlist.length);
-                backgroundMusic.src = playlist[currentSongIndex];
-                backgroundMusic.load();
-            }
+            // Clear playlist so startTimer() fetches fresh tracks from the API on next start.
+            // For local provider this is a no-op (fetchPlaylistFromAPI repopulates instantly).
+            playlist = [];
+            currentSongIndex = 0;
 
             backgroundMusic.currentTime = 0;
             backgroundMusic.volume = 1;
@@ -346,12 +399,9 @@
             updateTimer(); // Update display and title
             body.className = 'bg-green-500'; // Reset background color
 
-            // Pick a new random song when setting a new timer length
-            if (playlist.length > 0) {
-                currentSongIndex = Math.floor(Math.random() * playlist.length);
-                backgroundMusic.src = playlist[currentSongIndex];
-                backgroundMusic.load();
-            }
+            // Clear playlist so startTimer() fetches fresh tracks from the API on next start.
+            playlist = [];
+            currentSongIndex = 0;
 
             backgroundMusic.currentTime = 0;
             backgroundMusic.volume = 1;
@@ -405,15 +455,16 @@
 
 
         // Initialize the timer display and load initial song on page load
-        window.onload = function() {
+        window.onload = async function() {
             // Set initial time to 20 minutes (default) and update slider display
-            setTimer(20, true); // Call setTimer with default 20 minutes and update slider
+            setTimer(20, true);
 
             // Load alarm sound once to prepare
             alarmMusic.src = alarmPath;
             alarmMusic.load();
 
-            // Randomly select the first song to be ready for playback on initial load
+            // Prefetch playlist so the first track is ready when the user hits start
+            await fetchPlaylistFromAPI();
             if (playlist.length > 0) {
                 currentSongIndex = Math.floor(Math.random() * playlist.length);
                 backgroundMusic.src = playlist[currentSongIndex];
@@ -421,7 +472,6 @@
             }
 
             lucide.createIcons();
-            // Initial update of the title to show the default time
             document.title = `${formatTime(timeLeft)} -  Focus Timer`;
         };
     </script>
