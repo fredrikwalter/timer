@@ -46,6 +46,13 @@
         </div>
     </div>
 
+    <!-- Shown only when browser blocks autoplay audio (iOS requires a gesture) -->
+    <div id="audioHint" class="hidden fixed inset-0 flex items-end justify-center pb-16 pointer-events-none">
+        <div class="bg-white bg-opacity-20 text-white text-lg font-semibold px-6 py-3 rounded-full backdrop-blur-sm">
+            Tap anywhere to enable sound
+        </div>
+    </div>
+
     <audio id="backgroundMusic" preload="auto"></audio>
     <audio id="alarmMusic" preload="auto"></audio>
 
@@ -54,9 +61,20 @@
         const pauseButton = document.getElementById('pauseButton');
         const resetButton = document.getElementById('resetButton');
         const muteButton = document.getElementById('muteButton');
+        const audioHint = document.getElementById('audioHint');
         const body = document.body;
         const backgroundMusic = document.getElementById('backgroundMusic');
         const alarmMusic = document.getElementById('alarmMusic');
+
+        // Unlock audio on first user gesture (iOS autoplay policy)
+        function unlockAudio() {
+            audioHint.classList.add('hidden');
+            document.removeEventListener('touchstart', unlockAudio);
+            document.removeEventListener('click', unlockAudio);
+            if (isRunning && !isMuted) {
+                backgroundMusic.play().catch(() => {});
+            }
+        }
 
         const DURATION = 20 * 60;
         const playlist = ['songs/1.mp3', 'songs/2.mp3', 'songs/3.mp3'];
@@ -149,9 +167,13 @@
                 isRunning = true;
                 timerInterval = setInterval(updateTimer, 1000);
                 if (!isMuted) {
-                    backgroundMusic.play().catch(() => {});
+                    backgroundMusic.play().catch(() => {
+                        // Autoplay blocked — wait for first user gesture
+                        audioHint.classList.remove('hidden');
+                        document.addEventListener('touchstart', unlockAudio, { once: true });
+                        document.addEventListener('click', unlockAudio, { once: true });
+                    });
                 }
-                // Switch pause button to show pause icon
                 updatePauseButton(true);
             }
         }
