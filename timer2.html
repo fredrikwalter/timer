@@ -109,11 +109,10 @@
         }
 
         function playCurrentSong() {
-            if (!isMuted && playlist.length > 0) {
-                backgroundMusic.src = playlist[currentSongIndex];
-                backgroundMusic.load();
-                backgroundMusic.play().catch(() => {});
-            }
+            if (playlist.length === 0) return;
+            backgroundMusic.src = playlist[currentSongIndex];
+            backgroundMusic.load();
+            if (!isMuted) backgroundMusic.play().catch(() => {});
         }
 
         function playNextSong() {
