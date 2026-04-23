@@ -85,19 +85,13 @@
         const alarmPath = 'alarm/alarm1.mp3';
 
         async function buildPlaylist() {
-            const found = [];
-            const probes = Array.from({ length: 50 }, (_, i) => {
-                const path = `songs/${i + 1}.mp3`;
-                return new Promise(resolve => {
-                    const a = new Audio();
-                    a.addEventListener('loadedmetadata', () => resolve(path), { once: true });
-                    a.addEventListener('error', () => resolve(null), { once: true });
-                    a.src = path;
-                });
-            });
-            const results = await Promise.all(probes);
-            playlist = results.filter(Boolean);
-            if (playlist.length === 0) playlist = ['songs/1.mp3', 'songs/2.mp3', 'songs/3.mp3'];
+            try {
+                const res = await fetch('songs/playlist.json');
+                const files = await res.json();
+                playlist = files.map(f => `songs/${f}`);
+            } catch {
+                playlist = [];
+            }
         }
 
         let currentSongIndex = 0;
