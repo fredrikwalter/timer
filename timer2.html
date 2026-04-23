@@ -37,6 +37,9 @@
             <button id="pauseButton" class="bg-white text-yellow-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-yellow-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
                 <i data-lucide="pause" class="lucide"></i>
             </button>
+            <button id="skipButton" class="bg-white text-blue-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
+                <i data-lucide="skip-forward" class="lucide"></i>
+            </button>
             <button id="resetButton" class="bg-white text-red-700 px-6 py-3 rounded-full shadow-lg hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-300 ease-in-out text-lg font-semibold flex items-center justify-center">
                 <i data-lucide="rotate-ccw" class="lucide"></i>
             </button>
@@ -59,6 +62,7 @@
     <script>
         const timerDisplay = document.getElementById('timer');
         const pauseButton = document.getElementById('pauseButton');
+        const skipButton = document.getElementById('skipButton');
         const resetButton = document.getElementById('resetButton');
         const muteButton = document.getElementById('muteButton');
         const audioHint = document.getElementById('audioHint');
@@ -77,8 +81,23 @@
         }
 
         const DURATION = 20 * 60;
-        const playlist = ['songs/1.mp3', 'songs/2.mp3', 'songs/3.mp3'];
+        let playlist = [];
         const alarmPath = 'alarm/alarm1.mp3';
+
+        async function buildPlaylist() {
+            const found = [];
+            for (let i = 1; i <= 50; i++) {
+                const path = `songs/${i}.mp3`;
+                try {
+                    const res = await fetch(path, { method: 'HEAD' });
+                    if (res.ok) found.push(path);
+                    else break;
+                } catch {
+                    break;
+                }
+            }
+            playlist = found.length > 0 ? found : ['songs/1.mp3', 'songs/2.mp3', 'songs/3.mp3'];
+        }
 
         let currentSongIndex = 0;
         let timeLeft = DURATION;
@@ -238,15 +257,18 @@
 
         backgroundMusic.addEventListener('ended', playNextSong);
         pauseButton.addEventListener('click', togglePause);
+        skipButton.addEventListener('click', playNextSong);
         resetButton.addEventListener('click', resetTimer);
         muteButton.addEventListener('click', toggleMute);
 
         // Auto-start on page load
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             lucide.createIcons();
 
             alarmMusic.src = alarmPath;
             alarmMusic.load();
+
+            await buildPlaylist();
 
             currentSongIndex = Math.floor(Math.random() * playlist.length);
             backgroundMusic.src = playlist[currentSongIndex];
