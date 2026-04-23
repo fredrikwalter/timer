@@ -88,13 +88,14 @@
             const found = [];
             for (let i = 1; i <= 50; i++) {
                 const path = `songs/${i}.mp3`;
-                try {
-                    const res = await fetch(path, { method: 'HEAD' });
-                    if (res.ok) found.push(path);
-                    else break;
-                } catch {
-                    break;
-                }
+                const ok = await new Promise(resolve => {
+                    const a = new Audio();
+                    a.addEventListener('loadedmetadata', () => resolve(true), { once: true });
+                    a.addEventListener('error', () => resolve(false), { once: true });
+                    a.src = path;
+                });
+                if (ok) found.push(path);
+                else break;
             }
             playlist = found.length > 0 ? found : ['songs/1.mp3', 'songs/2.mp3', 'songs/3.mp3'];
         }
